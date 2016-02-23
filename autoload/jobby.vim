@@ -2,6 +2,7 @@ scriptencoding utf-8
 let s:save_cpo = &cpo
 set cpo&vim
 
+" TODO: Buffer to list managing jobs.
 
 function! jobby#run(cmdline, args) abort
     if a:cmdline[0] ==# ':'
@@ -28,8 +29,21 @@ function! jobby#run(cmdline, args) abort
 endfunction
 
 function! jobby#__exit_cb__(job, status) abort
-    " TODO: Remove job from job list.
-    echomsg ''
+    " Output 'Done' message with command-line string.
+    let ctx = s:job_foreach('s:get_cmdline_by_job', {'job': a:job})
+    if has_key(ctx, 'cmdline') && has_key(ctx, 'id')
+        echo 'Done: ' . ctx.cmdline
+        " Remove job from job list.
+        call s:job_filter('v:val.id !=# ' . ctx.id)
+    endif
+endfunction
+
+function! s:get_cmdline_by_job(jobdict, ctx) abort
+    if a:jobdict.job ==# a:ctx.job
+        let a:ctx.cmdline = a:jobdict.cmdline
+        let a:ctx.id = a:jobdict.id
+        call s:job_foreach_break()
+    endif
 endfunction
 
 function! jobby#stop(cmdline) abort
@@ -110,15 +124,26 @@ function! s:job_stop_forcefully(index) abort
     return 1
 endfunction
 
+function! s:job_filter(expr) abort
+    call filter(s:job_list, a:expr)
+endfunction
+
 function! s:job_get_list() abort
     return map(copy(s:job_list), 'v:val.job')
 endfunction
 
-function! s:job_foreach(F) abort
-    let ctx = {}
-    for jobdict in s:job_list
-        call call(a:F, [jobdict.job, jobdict.cmdline, ctx])
-    endfor
+function! s:job_foreach_break() abort
+    throw 'JOBBY: BREAK'
+endfunction
+
+function! s:job_foreach(F, ...) abort
+    let ctx = get(a:000, 0, {})
+    try
+        for jobdict in s:job_list
+            call call(a:F, [jobdict, ctx])
+        endfor
+    catch /\<JOBBY: BREAK$/
+    endtry
     return ctx
 endfunction
 

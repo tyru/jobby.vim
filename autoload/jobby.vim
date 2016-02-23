@@ -13,6 +13,7 @@ function! jobby#run(cmdline, args) abort
         " Run external command.
         let args = ['/bin/sh', '-c', a:cmdline . ' </dev/null >/dev/null']
         let job = job_start(args)
+        " let job = job_start(a:cmdline, {"in-io": "null", "out-io": "null"})
     endif
     if job_status(job) ==# 'fail'
         echom 'Run(failure): ' . a:cmdline
@@ -71,10 +72,15 @@ function! jobby#list() abort
     endif
 endfunction
 
-function! s:do_echo(job, cmdline, ctx) abort
+function! s:do_echo(jobdict, ctx) abort
     let a:ctx.count = get(a:ctx, 'count', 0) + 1
-    let status = job_status(a:job)
-    echom printf('(%s) %s', status, a:cmdline)
+    let status = job_status(a:jobdict.job)
+    echom printf('(%s) %s', status, a:jobdict.cmdline)
+endfunction
+
+function! jobby#clean() abort
+    let re = '\v^(dead|fail)$'
+    call s:job_filter('job_status(v:val.job) !~# ' . string(re))
 endfunction
 
 

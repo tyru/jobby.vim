@@ -24,6 +24,7 @@ command! -nargs=+ JobbyRun call jobby#run(<q-args>, [<f-args>])
 " TODO: Completion (from s:job_list)
 command! -nargs=+ JobbyStop call jobby#stop(<q-args>)
 command! -nargs=0 JobbyList call jobby#list()
+command! -nargs=0 JobbyClean call jobby#clean()
 
 
 let &cpo = s:save_cpo

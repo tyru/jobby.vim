@@ -5,6 +5,13 @@ if exists('g:loaded_jobby')
 endif
 let g:loaded_jobby = 1
 
+if !has('patch-7.4.1393')
+    echohl ErrorMsg
+    echomsg 'This plugin requires Vim 7.4.1393 or higher.'
+    echohl None
+    finish
+endif
+
 let s:save_cpo = &cpo
 set cpo&vim
 

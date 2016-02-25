@@ -2,7 +2,8 @@ scriptencoding utf-8
 let s:save_cpo = &cpo
 set cpo&vim
 
-" TODO: Buffer to list managing jobs.
+let g:jobby#list_buf_open_cmd = get(g:, 'jobby#list_buf_open_cmd', '5new')
+
 
 function! jobby#run(cmdline, args) abort
     if a:cmdline[0] ==# ':'
@@ -63,19 +64,33 @@ function! jobby#stop(cmdline) abort
 endfunction
 
 function! jobby#list() abort
-    " Show job status in job list.
+    try
+        call s:open_buffer()
+    catch
+        echohl ErrorMsg
+        echomsg 'Could not open list buffer'
+        echohl None
+        return
+    endtry
+    " Output job status in job list to opened buffer.
     " * Arguments
     " * Current output
-    let ctx = s:job_foreach('s:do_echo')
-    if ctx.count ==# 0
-        echom 'No jobs are running.'
+    let ctx = s:job_foreach('s:setline_job_status')
+    if !has_key(ctx, 'count')
+        call setline(1, 'No jobs are running.')
     endif
 endfunction
 
-function! s:do_echo(jobdict, ctx) abort
+function! s:open_buffer() abort
+    execute g:jobby#list_buf_open_cmd
+    setlocal buftype=nofile bufhidden=wipe noswapfile nobuflisted
+endfunction
+
+function! s:setline_job_status(jobdict, ctx) abort
     let a:ctx.count = get(a:ctx, 'count', 0) + 1
+    let lnum = (a:ctx.count ==# 1 ? 1 : line('$') + 1)
     let status = job_status(a:jobdict.job)
-    echom printf('(%s) %s', status, a:jobdict.cmdline)
+    call setline(lnum, printf('(%s) %s', status, a:jobdict.cmdline))
 endfunction
 
 function! jobby#clean() abort

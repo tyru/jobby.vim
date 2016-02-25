@@ -57,43 +57,53 @@ function! jobby#__exit_cb__(job, _exitcode, ...) abort
         call s:job_postpone('jobby#__exit_cb__', [a:job, a:_exitcode, 1])
         return
     endif
-    " Close :JobbyList buffer if no running jobs.
-    if g:jobby#list_auto_preview
-        let jobby_winnr = s:find_jobby_window()
-        if jobby_winnr ># 0
-            " Temporarily set window variable to mark previous window.
-            let w:jobby_prev_window = 1
-            try
-                execute jobby_winnr 'wincmd w'
-                let job = s:get_job_by_expr(
-                \   'job_status(v:val.job) !~# ' . string('\v^(dead|fail)$')
-                \)
-                if job is v:null
-                    close
-                endif
-            finally
-                " Switch back to previous window.
-                for winnr in range(1, tabpagewinnr(tabpagenr(), '$'))
-                    if getwinvar(winnr, 'jobby_prev_window', v:null) isnot v:null
-                        execute winnr 'wincmd w'
-                        unlet w:jobby_prev_window
-                    endif
-                endfor
-            endtry
+    call s:job_inc_postpone_cb()
+    try
+        " Close :JobbyList buffer if no running jobs.
+        if g:jobby#list_auto_preview
+            call s:try_to_close_jobby_buffer()
         endif
-    endif
-    " Output 'Done' message with command-line string.
-    let ctx = s:job_foreach('s:get_cmdline_by_job', {'job': a:job})
-    if has_key(ctx, 'cmdline') && has_key(ctx, 'id')
-        redraw
-        echo '(jobby) Done: ' . ctx.cmdline
+        " Output 'Done' message with command-line string.
+        let ctx = s:job_foreach('s:get_cmdline_by_job', {'job': a:job})
+        if has_key(ctx, 'cmdline')
+            redraw
+            echo '(jobby) Done: ' . ctx.cmdline
+        endif
+    finally
+        call s:job_dec_postpone_cb()
+        call s:job_handle_postpone_cb()
+    endtry
+endfunction
+
+function! s:try_to_close_jobby_buffer() abort
+    let [jobby_winnr, jobby_bufnr] = s:find_jobby_window()
+    if jobby_winnr ># 0
+        " Temporarily set window variable to mark previous window.
+        let w:jobby_prev_window = 1
+        try
+            execute jobby_winnr 'wincmd w'
+            let job = s:get_job_by_expr(
+            \   'job_status(v:val.job) !~# ' . string('\v^(dead|fail)$')
+            \)
+            " Really exists jobby buffer here?
+            if job is v:null && bufexists(jobby_bufnr)
+                close
+            endif
+        finally
+            " Switch back to previous window.
+            for winnr in range(1, tabpagewinnr(tabpagenr(), '$'))
+                if getwinvar(winnr, 'jobby_prev_window', v:null) isnot v:null
+                    execute winnr 'wincmd w'
+                    unlet w:jobby_prev_window
+                endif
+            endfor
+        endtry
     endif
 endfunction
 
 function! s:get_cmdline_by_job(jobdict, ctx) abort
     if a:jobdict.job ==# a:ctx.job
         let a:ctx.cmdline = a:jobdict.cmdline
-        let a:ctx.id = a:jobdict.id
         call s:job_foreach_break()
     endif
 endfunction
@@ -112,7 +122,14 @@ endfunction
 function! s:do_stop(cmdline) abort
     if a:cmdline =~# '^[0-9]\+$'
         " Job ID
-        if s:job_stop_forcefully(a:cmdline + 0)
+        let job = s:get_job_by_jobid(a:cmdline + 0)
+        if job is v:null
+            echohl ErrorMsg
+            echomsg '(jobby) :JobbyStop could not find a correspond job.'
+            echohl None
+            return
+        endif
+        if s:stop_forcefully(job)
             echom '(jobby) Stop(success): ' . a:cmdline
         else
             echom '(jobby) Stop(failure): ' . a:cmdline
@@ -121,6 +138,29 @@ function! s:do_stop(cmdline) abort
         " TODO: Find matching jobs from job list.
         throw 'not implemented yet'
     endif
+endfunction
+
+" @throws
+function! s:stop_forcefully(job) abort
+    let start = reltime()
+    let maxtimeSec = 5
+    let waittime = 50
+    let sleepcmd = 'sleep %sm'
+
+    " Stop job.
+    call job_stop(a:job, 'term')
+    execute printf(sleepcmd, waittime)
+    while job_status(a:job)
+        let waittime = waittime * 2
+        let duraSec = matchstr(reltime(start, reltime()), '\d\+')
+        if duraSec >= maxtimeSec
+            return 0
+        endif
+    endwhile
+
+    " Remove job from job list.
+    call s:job_remove(a:job)
+    return 1
 endfunction
 
 function! jobby#list() abort
@@ -134,7 +174,7 @@ function! jobby#list() abort
 endfunction
 
 function! s:do_list() abort
-    let jobby_winnr = s:find_jobby_window()
+    let jobby_winnr = s:find_jobby_window()[0]
     if jobby_winnr > 0
         " Jump to the existing window.
         execute jobby_winnr 'wincmd w'
@@ -186,10 +226,10 @@ endfunction
 function! s:find_jobby_window() abort
     for bufnr in tabpagebuflist()
         if getbufvar(bufnr, 'jobby_list_buffer', v:null) isnot v:null
-            return bufwinnr(bufnr)
+            return [bufwinnr(bufnr), bufnr]
         endif
     endfor
-    return -1
+    return [-1, -1]
 endfunction
 
 function! jobby#clean() abort
@@ -224,6 +264,10 @@ function! s:job_add(job, cmdline) abort
     \}]
 endfunction
 
+function! s:job_remove(job) abort
+    call filter(s:job_list, 'v:val.job !=# a:job')
+endfunction
+
 " @throws
 function! s:job_set(job, key, Value) abort
     let jobdict = s:get_jobdict_by_expr('v:val.job ==# job', {'job': a:job})
@@ -250,37 +294,12 @@ function! s:get_job_by_expr(...) abort
     \           jobdict.job : v:null)
 endfunction
 
-function! s:job_count() abort
-    return len(s:job_list)
+function! s:get_job_by_jobid(jobid) abort
+    return s:get_job_by_expr('v:val.id ==# ' . a:jobid)
 endfunction
 
-" @throws
-function! s:job_stop_forcefully(index) abort
-    if a:index < 0 || a:index >= s:job_count()
-        throw 'internal error: out of range (s:job_list[index])'
-    endif
-
-    let job = s:job_list[a:index].job
-    let start = reltime()
-    let maxtimeSec = 5
-    let waittime = 50
-    let sleepcmd = 'sleep %sm'
-
-    " Stop job.
-    call job_stop(job, 'term')
-    execute printf(sleepcmd, waittime)
-    while job_status(job)
-        let waittime = waittime * 2
-        let duraSec = matchstr(reltime(start, reltime()), '\d\+')
-        if duraSec >= maxtimeSec
-            return 0
-        endif
-    endwhile
-
-    " Remove job from job list.
-    let id = s:job_list[a:index].id
-    call filter(s:job_list, 'v:val.id !=# id')
-    return 1
+function! s:job_count() abort
+    return len(s:job_list)
 endfunction
 
 function! s:job_filter(expr) abort

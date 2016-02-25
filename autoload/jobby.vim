@@ -2,8 +2,10 @@ scriptencoding utf-8
 let s:save_cpo = &cpo
 set cpo&vim
 
-let g:jobby#list_buf_open_cmd = get(g:, 'jobby#list_buf_open_cmd', '5new')
-let g:jobby#list_auto_preview = get(g:, 'jobby#list_auto_preview', 1)
+let g:jobby#list_buf_open_cmd =
+\   get(g:, 'jobby#list_buf_open_cmd', 'botright 5new')
+let g:jobby#list_auto_preview =
+\   get(g:, 'jobby#list_auto_preview', 1)
 
 
 " @throws

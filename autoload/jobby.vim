@@ -10,10 +10,11 @@ let g:jobby#list_auto_preview =
 
 " @throws
 function! jobby#run(cmdline, args) abort
-    call s:job_set_postpone_cb(1)
+    call s:job_inc_postpone_cb()
     try
         call s:do_run(a:cmdline, a:args)
     finally
+        call s:job_dec_postpone_cb()
         call s:job_handle_postpone_cb()
     endtry
 endfunction
@@ -99,7 +100,16 @@ endfunction
 
 " @throws
 function! jobby#stop(cmdline) abort
-    " Stop job.
+    call s:job_inc_postpone_cb()
+    try
+        call s:do_stop(a:cmdline)
+    finally
+        call s:job_dec_postpone_cb()
+        call s:job_handle_postpone_cb()
+    endtry
+endfunction
+
+function! s:do_stop(cmdline) abort
     if a:cmdline =~# '^[0-9]\+$'
         " Job ID
         if s:job_stop_forcefully(a:cmdline + 0)
@@ -114,6 +124,16 @@ function! jobby#stop(cmdline) abort
 endfunction
 
 function! jobby#list() abort
+    call s:job_inc_postpone_cb()
+    try
+        call s:do_list()
+    finally
+        call s:job_dec_postpone_cb()
+        call s:job_handle_postpone_cb()
+    endtry
+endfunction
+
+function! s:do_list() abort
     let jobby_winnr = s:find_jobby_window()
     if jobby_winnr > 0
         " Jump to the existing window.
@@ -165,16 +185,25 @@ function! s:setline_job_status(jobdict, ctx) abort
 endfunction
 
 function! jobby#clean() abort
+    call s:job_inc_postpone_cb()
+    try
+        call s:do_clean()
+    finally
+        call s:job_dec_postpone_cb()
+        call s:job_handle_postpone_cb()
+    endtry
+endfunction
+
+function! s:do_clean() abort
     let re = '\v^(dead|fail)$'
     call s:job_filter('job_status(v:val.job) !~# ' . string(re))
 endfunction
 
 
 
-
 let s:job_list = []
 let s:job_id = 0
-let s:job_enable_postpone_cb = 0
+let s:job_postpone_sem_count = 0
 let s:job_postpone_cb_list = []
 
 function! s:job_add(job, cmdline) abort
@@ -270,12 +299,19 @@ function! s:job_foreach(F, ...) abort
     return ctx
 endfunction
 
-function! s:job_set_postpone_cb(bool) abort
-    let s:job_enable_postpone_cb = !!a:bool
+function! s:job_inc_postpone_cb() abort
+    let s:job_postpone_sem_count += 1
+endfunction
+
+function! s:job_dec_postpone_cb() abort
+    if s:job_postpone_sem_count <=# 0
+        throw 's:job_postpone_sem_count is already 0 or smaller.'
+    endif
+    let s:job_postpone_sem_count -= 1
 endfunction
 
 function! s:job_enabled_postpone_cb() abort
-    return s:job_enable_postpone_cb
+    return !!s:job_postpone_sem_count
 endfunction
 
 function! s:job_postpone(F, args) abort
@@ -283,12 +319,13 @@ function! s:job_postpone(F, args) abort
 endfunction
 
 function! s:job_handle_postpone_cb() abort
-    let s:job_enable_postpone_cb = 1
+    if s:job_postpone_sem_count ># 0
+        return
+    endif
     while !empty(s:job_postpone_cb_list)
         let [F, args] = remove(s:job_postpone_cb_list, 0)
         call call(F, args)
     endwhile
-    let s:job_enable_postpone_cb = 0
 endfunction
 
 

@@ -28,7 +28,7 @@ function! s:do_run(cmdline, args) abort
         " let job = job_start(a:cmdline, {"in-io": "null", "out-io": "null"})
     endif
     if job_status(job) ==# 'fail'
-        echom 'Run(failure): ' . a:cmdline
+        echom '(jobby) Run(failure): ' . a:cmdline
         return
     endif
     call job_setoptions(job, {
@@ -42,7 +42,7 @@ function! s:do_run(cmdline, args) abort
         JobbyList
     endif
     " Message
-    echom 'Run(success): ' . a:cmdline
+    echom '(jobby) Run(success): ' . a:cmdline
 endfunction
 
 function! jobby#__exit_cb__(job, _exitcode, ...) abort
@@ -83,7 +83,7 @@ function! jobby#__exit_cb__(job, _exitcode, ...) abort
     let ctx = s:job_foreach('s:get_cmdline_by_job', {'job': a:job})
     if has_key(ctx, 'cmdline') && has_key(ctx, 'id')
         redraw
-        echo 'Done: ' . ctx.cmdline
+        echo '(jobby) Done: ' . ctx.cmdline
     endif
 endfunction
 
@@ -101,9 +101,9 @@ function! jobby#stop(cmdline) abort
     if a:cmdline =~# '^[0-9]\+$'
         " Job ID
         if s:job_stop_forcefully(a:cmdline + 0)
-            echom 'Stop(success): ' . a:cmdline
+            echom '(jobby) Stop(success): ' . a:cmdline
         else
-            echom 'Stop(failure): ' . a:cmdline
+            echom '(jobby) Stop(failure): ' . a:cmdline
         endif
     else
         " TODO: Find matching jobs from job list.
@@ -122,7 +122,7 @@ function! jobby#list() abort
             execute g:jobby#list_buf_open_cmd
         catch
             echohl ErrorMsg
-            echomsg 'Could not open list buffer'
+            echomsg '(jobby) :JobbyList could not open a buffer'
             echohl None
             return
         endtry

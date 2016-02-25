@@ -5,6 +5,7 @@ set cpo&vim
 let g:jobby#list_buf_open_cmd = get(g:, 'jobby#list_buf_open_cmd', '5new')
 
 
+" @throws
 function! jobby#run(cmdline, args) abort
     if a:cmdline[0] ==# ':'
         " TODO: Run Ex command in another Vim.
@@ -30,12 +31,13 @@ function! jobby#run(cmdline, args) abort
     echom 'Run(success): ' . a:cmdline
 endfunction
 
-function! jobby#__exit_cb__(job, status) abort
+function! jobby#__exit_cb__(job, ...) abort
     " Output 'Done' message with command-line string.
     let ctx = s:job_foreach('s:get_cmdline_by_job', {'job': a:job})
     if has_key(ctx, 'cmdline') && has_key(ctx, 'id')
         echo 'Done: ' . ctx.cmdline
     endif
+    call s:job_set(a:job, 'endtime', reltime())
 endfunction
 
 function! s:get_cmdline_by_job(jobdict, ctx) abort
@@ -46,6 +48,7 @@ function! s:get_cmdline_by_job(jobdict, ctx) abort
     endif
 endfunction
 
+" @throws
 function! jobby#stop(cmdline) abort
     " Stop job.
     if a:cmdline =~# '^[0-9]\+$'
@@ -88,7 +91,14 @@ function! s:setline_job_status(jobdict, ctx) abort
     let a:ctx.count = get(a:ctx, 'count', 0) + 1
     let lnum = (a:ctx.count ==# 1 ? 1 : line('$') + 1)
     let status = job_status(a:jobdict.job)
-    call setline(lnum, printf('(%s) %s', status, a:jobdict.cmdline))
+    if !has_key(a:jobdict, 'endtime')
+        " XXX
+        call jobby#__exit_cb__(a:jobdict.job, job_status(a:jobdict.job))
+    endif
+    let reltime = reltime(a:jobdict.starttime, a:jobdict.endtime)
+    let floattime = str2float(matchstr(reltimestr(reltime), '[0-9.]\+'))
+    let line = printf('(%s: %.1fs) %s', status, floattime, a:jobdict.cmdline)
+    call setline(lnum, line)
 endfunction
 
 function! jobby#clean() abort
@@ -107,14 +117,30 @@ function! s:job_add(job, cmdline) abort
     let s:job_list += [{
     \   'id': s:job_id,
     \   'job': a:job,
+    \   'starttime': reltime(),
     \   'cmdline': a:cmdline
     \}]
+endfunction
+
+" @throws
+function! s:job_set(job, key, Value) abort
+    let jobdict = s:get_jobdict_by_job(a:job)
+    if jobdict isnot v:null
+        let jobdict[a:key] = a:Value
+    else
+        throw 's:job_set(): could not find jobdict by a:job'
+    endif
+endfunction
+
+function! s:get_jobdict_by_job(job) abort
+    return get(filter(copy(s:job_list), 'v:val.job ==# a:job'), 0, v:null)
 endfunction
 
 function! s:job_count() abort
     return len(s:job_list)
 endfunction
 
+" @throws
 function! s:job_stop_forcefully(index) abort
     if a:index < 0 || a:index >= s:job_count()
         throw 'internal error: out of range (s:job_list[index])'
@@ -151,6 +177,7 @@ function! s:job_get_list() abort
     return map(copy(s:job_list), 'v:val.job')
 endfunction
 
+" @throws
 function! s:job_foreach_break() abort
     throw 'JOBBY: BREAK'
 endfunction

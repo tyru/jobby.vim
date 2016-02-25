@@ -35,8 +35,6 @@ function! jobby#__exit_cb__(job, status) abort
     let ctx = s:job_foreach('s:get_cmdline_by_job', {'job': a:job})
     if has_key(ctx, 'cmdline') && has_key(ctx, 'id')
         echo 'Done: ' . ctx.cmdline
-        " Remove job from job list.
-        call s:job_filter('v:val.id !=# ' . ctx.id)
     endif
 endfunction
 

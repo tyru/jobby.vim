@@ -8,7 +8,6 @@ let g:jobby#list_auto_preview =
 \   get(g:, 'jobby#list_auto_preview', 1)
 
 
-" @throws
 function! jobby#run(cmdline, args) abort
     call s:job_inc_postpone_cb()
     try
@@ -128,7 +127,6 @@ function! jobby#__stop_complete__(arglead, cmdline, ...) abort
     return []
 endfunction
 
-" @throws
 function! jobby#stop(cmdline) abort
     call s:job_inc_postpone_cb()
     try
@@ -166,7 +164,6 @@ function! s:do_stop(cmdline) abort
     endif
 endfunction
 
-" @throws
 function! s:stop_forcefully(job) abort
     let start = reltime()
     let maxtimeSec = 5
@@ -294,7 +291,6 @@ function! s:job_remove(job) abort
     call filter(s:job_list, 'v:val.job !=# a:job')
 endfunction
 
-" @throws
 function! s:job_set(job, key, Value) abort
     let jobdict = s:get_jobdict_by_expr('v:val.job ==# job', {'job': a:job})
     if jobdict isnot v:null
@@ -340,7 +336,6 @@ function! s:job_get_list() abort
     return map(copy(s:job_list), 'v:val.job')
 endfunction
 
-" @throws
 function! s:job_foreach_break() abort
     throw 'JOBBY: BREAK'
 endfunction

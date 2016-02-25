@@ -108,6 +108,26 @@ function! s:get_cmdline_by_job(jobdict, ctx) abort
     endif
 endfunction
 
+function! jobby#__stop_complete__(arglead, cmdline, ...) abort
+    " Return a list of command-line strings (running jobs only).
+    let cmdline = substitute(a:cmdline, '^\u\w*\s*', '', '')
+    if cmdline ==# ''
+        return map(
+        \   s:get_jobdict_list_by_expr('job_status(v:val.job) ==# "run"'),
+        \   '"#" . v:val.id . " " . v:val.cmdline'
+        \)
+    endif
+    " Expand Job ID to command-line string.
+    if a:arglead =~# '\v^#?\d+$'
+        let jobid = matchstr(a:arglead, '^#\?\zs\d\+\ze$')
+        return map(
+        \   s:get_jobdict_list_by_expr('v:val.id ==# ' . jobid),
+        \   '"#" . v:val.id . " " . v:val.cmdline'
+        \)
+    endif
+    return []
+endfunction
+
 " @throws
 function! jobby#stop(cmdline) abort
     call s:job_inc_postpone_cb()
@@ -120,9 +140,11 @@ function! jobby#stop(cmdline) abort
 endfunction
 
 function! s:do_stop(cmdline) abort
-    if a:cmdline =~# '^[0-9]\+$'
+    if a:cmdline =~# '\v^#?\d+'
         " Job ID
-        let job = s:get_job_by_jobid(a:cmdline + 0)
+        " e.g.: "3", "#3", "#3 sleep 5"
+        let jobid = matchstr(a:cmdline, '\v^#?\zs\d+')
+        let job = s:get_job_by_jobid(jobid)
         if job is v:null
             echohl ErrorMsg
             echomsg '(jobby) :JobbyStop could not find a correspond job.'
@@ -135,8 +157,12 @@ function! s:do_stop(cmdline) abort
             echom '(jobby) Stop(failure): ' . a:cmdline
         endif
     else
-        " TODO: Find matching jobs from job list.
-        throw 'not implemented yet'
+        " Search matching jobs by command-line string.
+        " TODO: Prompt if multiple matches
+        let expr = 'stridx(v:val.cmdline, ' . string(a:cmdline) . ') >=# 0'
+        for jobdict in s:get_jobdict_list_by_expr(expr)
+            call s:do_stop(jobdict.id)
+        endfor
     endif
 endfunction
 
@@ -278,14 +304,18 @@ function! s:job_set(job, key, Value) abort
     endif
 endfunction
 
-function! s:get_jobdict_by_expr(expr, ...) abort
+function! s:get_jobdict_list_by_expr(expr, ...) abort
     if a:0 && type(a:1) is type({})
         for [key, Value] in items(a:1)
             execute 'let' key '= Value'
             unlet Value
         endfor
     endif
-    return get(filter(copy(s:job_list), a:expr), 0, v:null)
+    return filter(copy(s:job_list), a:expr)
+endfunction
+
+function! s:get_jobdict_by_expr(...) abort
+    return get(call('s:get_jobdict_list_by_expr', a:000), 0, v:null)
 endfunction
 
 function! s:get_job_by_expr(...) abort

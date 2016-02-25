@@ -20,11 +20,14 @@ set cpo&vim
 "   if cmd startswith ':' { complete vim commands }
 "   else                  { complete external commands }
 " TODO: Allows users to determine which to invoke (<q-args>, <f-args>)
-command! -nargs=+ JobbyRun call jobby#run(<q-args>, [<f-args>])
-" TODO: Completion (from s:job_list)
-command! -nargs=+ JobbyStop call jobby#stop(<q-args>)
-command! -nargs=0 JobbyList call jobby#list()
-command! -nargs=0 JobbyClean call jobby#clean()
+command! -nargs=+
+\   JobbyRun call jobby#run(<q-args>, [<f-args>])
+command! -nargs=+ -complete=customlist,jobby#__stop_complete__
+\   JobbyStop call jobby#stop(<q-args>)
+command! -nargs=0
+\   JobbyList call jobby#list()
+command! -nargs=0
+\   JobbyClean call jobby#clean()
 
 
 let &cpo = s:save_cpo

@@ -169,9 +169,11 @@ function! s:build_job_status_lines(jobdict, ctx) abort
     if has_key(a:jobdict, 'endtime')
         let reltime = reltime(a:jobdict.starttime, a:jobdict.endtime)
         let floattime = str2float(matchstr(reltimestr(reltime), '[0-9.]\+'))
-        let line = printf('(%s: %.1fs) %s', status, floattime, a:jobdict.cmdline)
+        let line = printf('#%d (%s: %.1fs) %s',
+        \           a:jobdict.id, status, floattime, a:jobdict.cmdline)
     else
-        let line = printf('(%s) %s', status, a:jobdict.cmdline)
+        let line = printf('#%d %s',
+        \           a:jobdict.id, a:jobdict.cmdline)
     endif
     let a:ctx.lines += [line]
 endfunction

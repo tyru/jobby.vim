@@ -155,10 +155,30 @@ function! s:do_list() abort
     " Output job status in job list to opened buffer.
     " * Arguments
     " * Current output
-    let ctx = s:job_foreach('s:setline_job_status')
-    if !has_key(ctx, 'count')
-        call setline(1, 'No jobs are running.')
+    let ctx = s:job_foreach('s:build_job_status_lines')
+    if has_key(ctx, 'lines')
+        call s:set_whole_lines(ctx.lines)
+    else
+        call s:set_whole_lines(['No jobs are running.'])
     endif
+endfunction
+
+function! s:build_job_status_lines(jobdict, ctx) abort
+    let a:ctx.lines = get(a:ctx, 'lines', [])
+    let status = job_status(a:jobdict.job)
+    if has_key(a:jobdict, 'endtime')
+        let reltime = reltime(a:jobdict.starttime, a:jobdict.endtime)
+        let floattime = str2float(matchstr(reltimestr(reltime), '[0-9.]\+'))
+        let line = printf('(%s: %.1fs) %s', status, floattime, a:jobdict.cmdline)
+    else
+        let line = printf('(%s) %s', status, a:jobdict.cmdline)
+    endif
+    let a:ctx.lines += [line]
+endfunction
+
+function! s:set_whole_lines(lines) abort
+    %delete _
+    call setline(1, a:lines)
 endfunction
 
 function! s:find_jobby_window() abort
@@ -168,20 +188,6 @@ function! s:find_jobby_window() abort
         endif
     endfor
     return -1
-endfunction
-
-function! s:setline_job_status(jobdict, ctx) abort
-    let a:ctx.count = get(a:ctx, 'count', 0) + 1
-    let lnum = (a:ctx.count ==# 1 ? 1 : line('$') + 1)
-    let status = job_status(a:jobdict.job)
-    if has_key(a:jobdict, 'endtime')
-        let reltime = reltime(a:jobdict.starttime, a:jobdict.endtime)
-        let floattime = str2float(matchstr(reltimestr(reltime), '[0-9.]\+'))
-        let line = printf('(%s: %.1fs) %s', status, floattime, a:jobdict.cmdline)
-    else
-        let line = printf('(%s) %s', status, a:jobdict.cmdline)
-    endif
-    call setline(lnum, line)
 endfunction
 
 function! jobby#clean() abort

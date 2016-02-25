@@ -65,14 +65,30 @@ function! jobby#stop(cmdline) abort
 endfunction
 
 function! jobby#list() abort
-    try
-        call s:open_buffer()
-    catch
-        echohl ErrorMsg
-        echomsg 'Could not open list buffer'
-        echohl None
-        return
-    endtry
+    let jobby_winnr = -1
+    for bufnr in tabpagebuflist()
+        if getbufvar(bufnr, 'jobby_list_buffer', v:null) isnot v:null
+            let jobby_winnr = bufwinnr(bufnr)
+            break
+        endif
+    endfor
+    if jobby_winnr > 0
+        " Jump to the existing window.
+        execute jobby_winnr 'wincmd w'
+    else
+        " Open a new jobby buffer & window.
+        try
+            execute g:jobby#list_buf_open_cmd
+        catch
+            echohl ErrorMsg
+            echomsg 'Could not open list buffer'
+            echohl None
+            return
+        endtry
+        silent file '[jobby]'
+        let b:jobby_list_buffer = 1
+        setlocal buftype=nofile bufhidden=wipe noswapfile nobuflisted
+    endif
     " Output job status in job list to opened buffer.
     " * Arguments
     " * Current output
@@ -80,11 +96,6 @@ function! jobby#list() abort
     if !has_key(ctx, 'count')
         call setline(1, 'No jobs are running.')
     endif
-endfunction
-
-function! s:open_buffer() abort
-    execute g:jobby#list_buf_open_cmd
-    setlocal buftype=nofile bufhidden=wipe noswapfile nobuflisted
 endfunction
 
 function! s:setline_job_status(jobdict, ctx) abort

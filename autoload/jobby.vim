@@ -25,16 +25,14 @@ function! s:do_run(cmdline, args) abort
         throw 'not implemented yet'
     else
         " Run external command.
-        let args = ['/bin/sh', '-c', a:cmdline . ' </dev/null >/dev/null']
-        let job = job_start(args)
-        " let job = job_start(a:cmdline, {"in-io": "null", "out-io": "null"})
+        let job = job_start(a:cmdline, {"in_io": "null", "out_io": "null"})
     endif
     if job_status(job) ==# 'fail'
         echom '(jobby) Run(failure): ' . a:cmdline
         return
     endif
     call job_setoptions(job, {
-    \   'exit-cb': 'jobby#__exit_cb__',
+    \   'exit_cb': 'jobby#__exit_cb__',
     \   'stoponexit': 'kill'
     \})
     " Add spawned job to job list.
